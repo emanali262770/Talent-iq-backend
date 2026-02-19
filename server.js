@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { ENV } from "./lib/env.js";
 import { connectDb } from "./lib/db.js";
@@ -15,7 +16,7 @@ async function startServer() {
       console.log(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error("Failed to start server:", error);
+    console.error("Failed to start server.js:", error);
   }
 }
 startServer();
