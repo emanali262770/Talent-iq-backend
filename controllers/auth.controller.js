@@ -28,7 +28,12 @@ export const register = async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, ENV.JWT_SECRET, {
       expiresIn: "1d",
     });
-    res.cookie("token", token);
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
     res
       .status(201)
       .json({ message: "User Registered Successfully", user: newUser });
@@ -50,9 +55,11 @@ export async function login(req, res) {
     }
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ message: "Invalid Credentials" });
+      return res.status(400).json({ message: "User not found" });
     }
+
     const ispassValid = await bcrypt.compare(password, user.password);
+
     if (!ispassValid) {
       return res.status(400).json({ message: "Invalid Credentials" });
     }
@@ -61,23 +68,49 @@ export async function login(req, res) {
       ENV.JWT_SECRET,
       { expiresIn: "1d" },
     );
-    res.cookie("token", token);
-    res.status(200).json({ message: "Login Successful", token });
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+    res.status(200).json({
+      message: "Login Successful",
+      token,
+      user: { id: user._id, userName: user.userName, email: user.email },
+    });
   } catch (error) {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 }
 
 export async function logout(req, res) {
-    try {
-        const token = req.cookies.token;
-        if (!token) {
-            return res.status(400).json({ message: "No token provided" });
-        }
-       const  blacklistedToken=  await BlackList.create({ token });
-        res.clearCookie("token");
-        res.status(200).json({ message: "Logout Successful",data:blacklistedToken });
-    } catch (error) {
-        res.status(500).json({ message: "Server Error", error: error.message });
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(400).json({ message: "No token provided" });
     }
+    const blacklistedToken = await BlackList.create({ token });
+    res.clearCookie("token");
+    res
+      .status(200)
+      .json({ message: "Logout Successful", data: blacklistedToken });
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+}
+
+/**
+ * @get User
+ */
+export async function getMe(req, res) {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
 }
