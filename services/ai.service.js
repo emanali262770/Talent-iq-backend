@@ -99,7 +99,7 @@ export async function generateInterviewReport({ resume, selfDescription, jobDesc
 
         const data = JSON.parse(response.text.trim());
 
-        console.log("FINAL DATA:", JSON.stringify(data, null, 2));
+        // console.log("FINAL DATA:", JSON.stringify(data, null, 2));
 
         return data;
 

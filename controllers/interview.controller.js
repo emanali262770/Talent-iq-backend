@@ -2,14 +2,20 @@ import { PDFParse } from "pdf-parse";
 import { generateInterviewReport } from "../services/ai.service.js";
 import InterviewReport from "../models/interviewReport.model.js";
 
+
 export const generateInterviewReports = async (req, res) => {
   try {
     const resumefile = req.file;
 
+    if (!resumefile) {
+      return res.status(400).json({
+        message: "Resume file is required",
+      });
+    }
+
     const parser = new PDFParse({ data: resumefile.buffer });
 
     const result = await parser.getText();
-
     const resumeText = result.text;
 
     const { selfDescription, jobDescription } = req.body;
@@ -39,8 +45,6 @@ export const generateInterviewReports = async (req, res) => {
     });
   }
 };
-
-
 export const getAllInterviewReports=async(req,res)=>{
   try {
       const data=await InterviewReport.find({
@@ -49,7 +53,7 @@ export const getAllInterviewReports=async(req,res)=>{
       if (!data) {
         res.status(401).json({message:"No Data were found"})
       }
-      res.status(200).json({message: "All Data Were Fetch Successfully",data})
+      res.status(200).json({message: "All Data Were Fetch Successfully",interviewReport:data})
   } catch (error) {
     res.status(500).json({
       message: "Internal Server Error",
@@ -68,7 +72,7 @@ export const getInterviewReportsById=async(req,res)=>{
       if (!data) {
         res.status(401).json({message:"No Data were found"})
       }
-      res.status(200).json({message: "All Data Were Fetch Successfully",data})
+      res.status(200).json({message: "All Data Were Fetch Successfully",interviewReport:data})
   } catch (error) {
     res.status(500).json({
       message: "Internal Server Error",
