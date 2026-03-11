@@ -1,4 +1,3 @@
-import pdfParse from "pdf-parse";
 import { generateInterviewReport } from "../services/ai.service.js";
 import InterviewReport from "../models/interviewReport.model.js";
 
@@ -13,8 +12,23 @@ export const generateInterviewReports = async (req, res) => {
       });
     }
 
-    const result = await pdfParse(resumefile.buffer);
-    const resumeText = result.text;
+    // Lazy-load PDF parser to avoid crashing the whole serverless function at startup.
+    const pdfModule = await import("pdf-parse");
+    let resumeText = "";
+
+    if (typeof pdfModule.default === "function") {
+      const result = await pdfModule.default(resumefile.buffer);
+      resumeText = result.text;
+    } else if (typeof pdfModule.PDFParse === "function") {
+      const parser = new pdfModule.PDFParse({ data: resumefile.buffer });
+      const result = await parser.getText();
+      resumeText = result.text;
+      if (typeof parser.destroy === "function") {
+        await parser.destroy();
+      }
+    } else {
+      throw new Error("Unsupported pdf-parse module format");
+    }
 
     const { selfDescription, jobDescription } = req.body;
 
