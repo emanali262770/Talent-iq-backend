@@ -3,8 +3,14 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes.js";
 import interviewRoutes from "./routes/interview.routes.js";
+import { ENV } from "./lib/env.js";
 
 const app = express();
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://talent-iq-frontend-q5ao.vercel.app",
+  ENV.FRONTEND_URL,
+].filter(Boolean);
 
 // middleware
 app.use(express.json());

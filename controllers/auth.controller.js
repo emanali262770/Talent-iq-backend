@@ -3,6 +3,17 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ENV } from "../lib/env.js";
 import BlackList from "../models/blacklist.model.js";
+
+function getCookieOptions() {
+  const isProduction = ENV.NODE_ENV === "production" || !!process.env.VERCEL;
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    maxAge: 24 * 60 * 60 * 1000,
+  };
+}
 /**
  * @Post User Registration
  * @description This endpoint alllows users to register by providing their username, email, and password. The password is hashed before being stored in the database for security.
@@ -28,12 +39,7 @@ export const register = async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, ENV.JWT_SECRET, {
       expiresIn: "1d",
     });
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, getCookieOptions());
     res
       .status(201)
       .json({ message: "User Registered Successfully", user: newUser });
@@ -68,12 +74,7 @@ export async function login(req, res) {
       ENV.JWT_SECRET,
       { expiresIn: "1d" },
     );
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, getCookieOptions());
     res.status(200).json({
       message: "Login Successful",
       token,
@@ -91,7 +92,7 @@ export async function logout(req, res) {
       return res.status(400).json({ message: "No token provided" });
     }
     const blacklistedToken = await BlackList.create({ token });
-    res.clearCookie("token");
+    res.clearCookie("token", getCookieOptions());
     res
       .status(200)
       .json({ message: "Logout Successful", data: blacklistedToken });
