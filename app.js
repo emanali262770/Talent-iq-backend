@@ -11,6 +11,7 @@ app.use(express.json());
 app.use(
   cors({
     origin: ["http://localhost:5173", "https://talent-iq-frontend-q5ao.vercel.app"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
