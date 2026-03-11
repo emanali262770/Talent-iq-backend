@@ -1,5 +1,8 @@
+import { createRequire } from "module";
 import { generateInterviewReport } from "../services/ai.service.js";
 import InterviewReport from "../models/interviewReport.model.js";
+
+const require = createRequire(import.meta.url);
 
 
 export const generateInterviewReports = async (req, res) => {
@@ -12,23 +15,9 @@ export const generateInterviewReports = async (req, res) => {
       });
     }
 
-    // Lazy-load PDF parser to avoid crashing the whole serverless function at startup.
-    const pdfModule = await import("pdf-parse");
-    let resumeText = "";
-
-    if (typeof pdfModule.default === "function") {
-      const result = await pdfModule.default(resumefile.buffer);
-      resumeText = result.text;
-    } else if (typeof pdfModule.PDFParse === "function") {
-      const parser = new pdfModule.PDFParse({ data: resumefile.buffer });
-      const result = await parser.getText();
-      resumeText = result.text;
-      if (typeof parser.destroy === "function") {
-        await parser.destroy();
-      }
-    } else {
-      throw new Error("Unsupported pdf-parse module format");
-    }
+    const pdfParse = require("pdf-parse/lib/pdf-parse.js");
+    const result = await pdfParse(resumefile.buffer);
+    const resumeText = result.text;
 
     const { selfDescription, jobDescription } = req.body;
 
