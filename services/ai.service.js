@@ -62,6 +62,8 @@ const groq = new ChatGroq({
 
   temperature: 0,
 
+  maxTokens: 6000,
+
 });
 
 
@@ -75,6 +77,19 @@ const structuredModel = groq.withStructuredOutput(
     name: "interview_report",
   }
 );
+
+const MAX_RETRIES = 2;
+
+function isRetryableAiError(error) {
+  const message = error?.message || "";
+
+  return (
+    message.includes("tool_use_failed") ||
+    message.includes("json_validate_failed") ||
+    message.includes("Failed to parse tool call arguments") ||
+    message.includes("Failed to generate JSON")
+  );
+}
 
 
 
@@ -207,6 +222,12 @@ Day 7 must include:
 - Review mistakes
 - Final preparation
 
+Keep all answers concise:
+- question: one sentence
+- intention: one sentence
+- answer: 2 short sentences maximum
+- focus: short phrase
+- each task: short practical action
 
 
 ====================
@@ -225,10 +246,24 @@ IMPORTANT
 
 
 
-    const result = await structuredModel.invoke(prompt);
+    let lastError;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const result = await structuredModel.invoke(prompt);
+
+        return result;
+      } catch (error) {
+        lastError = error;
+
+        if (!isRetryableAiError(error) || attempt === MAX_RETRIES) {
+          throw error;
+        }
+      }
+    }
 
 
-    return result;
+    throw lastError;
 
 
 

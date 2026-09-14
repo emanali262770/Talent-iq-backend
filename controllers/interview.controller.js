@@ -32,13 +32,22 @@ export const generateInterviewReports = async (req, res) => {
 
     const { selfDescription, jobDescription } = req.body;
 
-    const interviewGenerate = await generateInterviewReport({
-      resume: resumeText,
+    let interviewGenerate;
 
-      selfDescription,
+    try {
+      interviewGenerate = await generateInterviewReport({
+        resume: resumeText,
 
-      jobDescription,
-    });
+        selfDescription,
+
+        jobDescription,
+      });
+    } catch (error) {
+      return res.status(502).json({
+        message: "AI report generation failed. Please try again.",
+        error: "The AI provider returned an invalid response.",
+      });
+    }
 
     const interviewReport = await InterviewReport.create({
       user: req.user.id,
