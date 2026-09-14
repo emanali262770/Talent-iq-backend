@@ -1,4 +1,3 @@
-import { createRequire } from "module";
 import { generateInterviewReport } from "../services/ai.service.js";
 import InterviewReport from "../models/interviewReport.model.js";
 
@@ -14,7 +13,22 @@ export const generateInterviewReports = async (req, res) => {
       });
     }
 
-    const resumeText = await extractTextFromPDF(resumefile.buffer);
+    let resumeText;
+
+    try {
+      resumeText = await extractTextFromPDF(resumefile.buffer);
+    } catch (error) {
+      return res.status(400).json({
+        message: "Invalid or unsupported PDF file",
+        error: error.message,
+      });
+    }
+
+    if (!resumeText) {
+      return res.status(400).json({
+        message: "Could not extract text from PDF",
+      });
+    }
 
     const { selfDescription, jobDescription } = req.body;
 
