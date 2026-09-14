@@ -1,109 +1,245 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { ChatGroq } from "@langchain/groq";
+import { z } from "zod";
 import { ENV } from "../lib/env.js";
 
-// ─── 1. Gemini Native Schema ──────────────────────────────────────────────────
 
-const interviewReportSchema = {
-    type: Type.OBJECT,
-    properties: {
-        title: {
-            type: Type.STRING,
-            description: "The title of the job for which the interview report is generated"
-        },
-        matchScore: {
-            type: Type.NUMBER,
-            description: "A score between 0 and 100 indicating how well the candidate profile matches the job description"
-        },
-        technicalQuestions: {
-            type: Type.ARRAY,
-            description: "Exactly 5 technical questions tailored to the job description and candidate resume",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    question:  { type: Type.STRING, description: "The technical question to ask in the interview" },
-                    intention: { type: Type.STRING, description: "Why the interviewer is asking this question" },
-                    answer:    { type: Type.STRING, description: "How to answer this question, what points to cover, what approach to take etc." },
-                },
-                required: ["question", "intention", "answer"]
-            }
-        },
-        behavioralQuestions: {
-            type: Type.ARRAY,
-            description: "Exactly 4 behavioral questions tailored to the candidate background",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    question:  { type: Type.STRING, description: "The behavioral question to ask in the interview" },
-                    intention: { type: Type.STRING, description: "Why the interviewer is asking this question" },
-                    answer:    { type: Type.STRING, description: "How to answer this question, what points to cover, what approach to take etc." },
-                },
-                required: ["question", "intention", "answer"]
-            }
-        },
-        skillGaps: {
-            type: Type.ARRAY,
-            description: "Skills required by the job description that are missing from the candidate profile",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    skill:    { type: Type.STRING, description: "The missing skill" },
-                    severity: { type: Type.STRING, enum: ["low", "medium", "high"], description: "How critically this gap impacts the candidate chances" },
-                },
-                required: ["skill", "severity"]
-            }
-        },
-        preparationPlan: {
-            type: Type.ARRAY,
-            description: "A 7-day preparation plan. Day 7 must be mock interview and review",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    day:   { type: Type.NUMBER, description: "Day number starting from 1" },
-                    focus: { type: Type.STRING, description: "Main topic for this day e.g. Node.js async patterns, system design" },
-                    tasks: {
-                        type: Type.ARRAY,
-                        description: "3 to 5 specific actionable tasks with real resources",
-                        items: { type: Type.STRING }
-                    },
-                },
-                required: ["day", "focus", "tasks"]
-            }
-        },
-    },
-    required: ["title", "matchScore", "technicalQuestions", "behavioralQuestions", "skillGaps", "preparationPlan"]
-};
+// Schema
 
-// ─── 2. Gemini Client ─────────────────────────────────────────────────────────
+const interviewSchema = z.object({
 
-const ai = new GoogleGenAI({ apiKey: ENV.GOOGLE_GENAI_API_KEY });
+  title: z.string(),
 
-// ─── 3. Main Function ─────────────────────────────────────────────────────────
+  matchScore: z.number()
+    .min(0)
+    .max(100),
 
-export async function generateInterviewReport({ resume, selfDescription, jobDescription }) {
-    try {
-       const prompt = `Generate an interview report for a candidate with the following details:
-                        Resume: ${resume}
-                        Self Description: ${selfDescription}
-                        Job Description: ${jobDescription}
-`
+  technicalQuestions: z.array(
+    z.object({
+      question: z.string(),
+      intention: z.string(),
+      answer: z.string(),
+    })
+  ),
 
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: interviewReportSchema,
-                temperature: 1,
-            },
-        });
+  behavioralQuestions: z.array(
+    z.object({
+      question: z.string(),
+      intention: z.string(),
+      answer: z.string(),
+    })
+  ),
 
-        const data = JSON.parse(response.text.trim());
+  skillGaps: z.array(
+    z.object({
+      skill: z.string(),
+      severity: z.enum([
+        "low",
+        "medium",
+        "high"
+      ]),
+    })
+  ),
 
-        // console.log("FINAL DATA:", JSON.stringify(data, null, 2));
+  preparationPlan: z.array(
+    z.object({
+      day: z.number(),
+      focus: z.string(),
+      tasks: z.array(z.string()),
+    })
+  ),
 
-        return data;
+});
 
-    } catch (error) {
-        res.status(500).json({ message: "Internal Server Error", error: error.message });
-    }
+
+
+// Groq Model
+
+const groq = new ChatGroq({
+
+  apiKey: ENV.GROQ_API_KEY,
+
+  model: "openai/gpt-oss-120b",
+
+  temperature: 0.4,
+
+});
+
+
+
+// Structured Output
+
+const structuredModel = groq.withStructuredOutput(
+  interviewSchema
+);
+
+
+
+
+// Generate Interview Report
+
+export async function generateInterviewReport({
+
+  resume,
+
+  selfDescription,
+
+  jobDescription,
+
+}) {
+
+
+  try {
+
+
+    const prompt = `
+
+You are an expert technical interviewer and career advisor.
+
+Your task is to analyze a candidate resume against a job description
+and create a realistic interview preparation report.
+
+
+
+====================
+CANDIDATE RESUME
+====================
+
+${resume}
+
+
+
+====================
+CANDIDATE DESCRIPTION
+====================
+
+${selfDescription || "Not provided"}
+
+
+
+====================
+JOB DESCRIPTION
+====================
+
+${jobDescription}
+
+
+
+====================
+ANALYSIS RULES
+====================
+
+
+1. Calculate matchScore from 0-100.
+
+Use this formula:
+
+- Required technical skills match: 50%
+- Professional experience match: 20%
+- Education match: 10%
+- Projects relevance: 20%
+
+
+2. Compare only real information from resume and job description.
+
+3. Do not assume candidate has skills that are not mentioned.
+
+4. Identify missing skills that can affect hiring chances.
+
+
+
+====================
+INTERVIEW QUESTIONS
+====================
+
+
+Generate:
+
+- Exactly 5 technical questions
+- Exactly 4 behavioral questions
+
+
+Technical questions should focus on:
+- Required job technologies
+- Candidate weak areas
+- Real interview scenarios
+
+
+For every question provide:
+
+question:
+The interview question
+
+intention:
+Why interviewer asks this question
+
+answer:
+What a strong candidate answer should include
+
+
+
+====================
+PREPARATION PLAN
+====================
+
+
+Create a 7 day preparation plan.
+
+Each day must have:
+
+day:
+Day number
+
+focus:
+Main learning topic
+
+tasks:
+3-5 practical tasks
+
+
+
+Day 7 must include:
+
+- Mock interview
+- Review mistakes
+- Final preparation
+
+
+
+====================
+IMPORTANT
+====================
+
+
+- Return only structured data.
+- Do not use markdown.
+- Do not create fake companies or experiences.
+- Do not mention Gemini, OpenAI, or other AI providers.
+- Only use technologies present in resume or job description.
+
+
+`;
+
+
+
+    const result = await structuredModel.invoke(prompt);
+
+
+    return result;
+
+
+
+  } catch (error) {
+
+
+    console.log(
+      "Groq Error:",
+      error.message
+    );
+
+
+    throw error;
+
+
+  }
+
 }
