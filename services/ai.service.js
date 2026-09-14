@@ -19,7 +19,7 @@ const interviewSchema = z.object({
       intention: z.string(),
       answer: z.string(),
     })
-  ),
+  ).length(5),
 
   behavioralQuestions: z.array(
     z.object({
@@ -27,7 +27,7 @@ const interviewSchema = z.object({
       intention: z.string(),
       answer: z.string(),
     })
-  ),
+  ).length(4),
 
   skillGaps: z.array(
     z.object({
@@ -46,7 +46,7 @@ const interviewSchema = z.object({
       focus: z.string(),
       tasks: z.array(z.string()),
     })
-  ),
+  ).length(7),
 
 });
 
@@ -60,7 +60,7 @@ const groq = new ChatGroq({
 
   model: "openai/gpt-oss-120b",
 
-  temperature: 0.4,
+  temperature: 0,
 
 });
 
@@ -69,7 +69,11 @@ const groq = new ChatGroq({
 // Structured Output
 
 const structuredModel = groq.withStructuredOutput(
-  interviewSchema
+  interviewSchema,
+  {
+    method: "functionCalling",
+    name: "interview_report",
+  }
 );
 
 
