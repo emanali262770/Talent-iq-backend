@@ -3,6 +3,97 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ENV } from "../lib/env.js";
 import BlackList from "../models/blacklist.model.js";
+import { createHash, randomBytes } from "node:crypto";
+
+async function sendPasswordResetEmail(email, resetUrl) {
+  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM } = ENV;
+  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) {
+    throw new Error("Password reset email is not configured");
+  }
+
+  let nodemailer;
+  try {
+    ({ default: nodemailer } = await import("nodemailer"));
+  } catch {
+    throw new Error("Install nodemailer to enable password reset emails");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT),
+    secure: SMTP_SECURE === "true" || Number(SMTP_PORT) === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  await transporter.sendMail({
+    from: SMTP_FROM,
+    to: email,
+    subject: "Reset your Talent IQ password",
+    text: `Use this link to reset your password. It expires in 15 minutes: ${resetUrl}`,
+    html: `<p>Use the link below to reset your password. It expires in 15 minutes.</p><p><a href="${resetUrl}">Reset password</a></p>`,
+  });
+}
+
+export async function forgotPassword(req, res) {
+  const genericResponse = {
+    message: "If an account exists for that email, password reset instructions have been sent.",
+  };
+  try {
+    const email = req.body?.email?.trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email is required" });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(200).json(genericResponse);
+
+    const frontendUrl = ENV.FRONTEND_URL?.replace(/\/$/, "");
+    if (!frontendUrl) throw new Error("FRONTEND_URL is not configured");
+    const rawToken = randomBytes(32).toString("hex");
+    user.passwordResetToken = createHash("sha256").update(rawToken).digest("hex");
+    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+
+    const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(rawToken)}`;
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl);
+    } catch (error) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+      throw error;
+    }
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error("Forgot password failed:", error.message);
+    return res.status(500).json({ message: "Unable to send password reset email" });
+  }
+}
+
+export async function resetPassword(req, res) {
+  try {
+    const { token, password } = req.body ?? {};
+    if (!token || !password) {
+      return res.status(400).json({ message: "Token and new password are required" });
+    }
+    if (typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters long" });
+    }
+
+    const hashedToken = createHash("sha256").update(token).digest("hex");
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: new Date() },
+    }).select("+passwordResetToken +passwordResetExpires");
+    if (!user) return res.status(400).json({ message: "Invalid or expired reset token" });
+
+    user.password = await bcrypt.hash(password, 10);
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+    return res.status(200).json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Reset password failed:", error.message);
+    return res.status(500).json({ message: "Server Error" });
+  }
+}
 
 function getCookieOptions() {
   const isProduction = ENV.NODE_ENV === "production" || !!process.env.VERCEL;
