@@ -16,7 +16,7 @@ const allowedOrigins = [
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://talent-iq-frontend-q5ao.vercel.app"],
+    origin: ["http://localhost:5173", "https://talent-iq-frontend-q5ao.vercel.app","https://talent-iq-ashen-six.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
